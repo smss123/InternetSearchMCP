@@ -81,7 +81,69 @@ Add to `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claud
 }
 ```
 
-Restart the client afterwards. The server communicates over stdio; all logs go to stderr so they never corrupt the protocol stream.
+### Register with LM Studio
+
+LM Studio (0.3.17+) supports MCP servers. Open **Program** (right sidebar) → **Install → Edit mcp.json**, and add:
+
+```json
+{
+  "mcpServers": {
+    "internet-search": {
+      "command": "dotnet",
+      "args": ["/ABSOLUTE/PATH/TO/publish/InternetSearchMCP.dll"]
+    }
+  }
+}
+```
+
+Save, then toggle the server on in the Program panel. Any tool-capable model you run locally (Qwen, Llama, Mistral, etc.) can now call `smart_search` and `xprema_code`. Tip: smaller local models follow tools better if your system prompt says *"Use the smart_search tool for questions needing current information; use xprema_code for coding errors."*
+
+### Register with Cursor
+
+**Settings → MCP → Add new global MCP server**, or create `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "internet-search": {
+      "command": "dotnet",
+      "args": ["/ABSOLUTE/PATH/TO/publish/InternetSearchMCP.dll"]
+    }
+  }
+}
+```
+
+### Register with VS Code (GitHub Copilot)
+
+Create `.vscode/mcp.json` in your workspace (or add via **MCP: Add Server** from the command palette):
+
+```json
+{
+  "servers": {
+    "internet-search": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": ["/ABSOLUTE/PATH/TO/publish/InternetSearchMCP.dll"]
+    }
+  }
+}
+```
+
+### Register with JetBrains Rider / IntelliJ (AI Assistant)
+
+**Settings → Tools → AI Assistant → Model Context Protocol (MCP) → Add**, choose *As JSON* and paste the same `command`/`args` block used above.
+
+### Other MCP clients
+
+Any client that speaks MCP over **stdio** works the same way — the launch command is always:
+
+```
+dotnet /ABSOLUTE/PATH/TO/publish/InternetSearchMCP.dll
+```
+
+For clients that only support HTTP/SSE transports, put the server behind an MCP stdio-to-HTTP gateway (e.g. `mcp-proxy`).
+
+Restart the client after editing its config. The server communicates over stdio; all logs go to stderr so they never corrupt the protocol stream.
 
 ## Usage
 
