@@ -4,6 +4,7 @@
 [![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.2.0-blue)](https://modelcontextprotocol.io/)
 [![GitHub](https://img.shields.io/badge/GitHub-smss123%2FInternetSearchMCP-181717?logo=github)](https://github.com/smss123/InternetSearchMCP)
 [![Last commit](https://img.shields.io/github/last-commit/smss123/InternetSearchMCP)](https://github.com/smss123/InternetSearchMCP/commits/main)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 > **Repository:** [github.com/smss123/InternetSearchMCP](https://github.com/smss123/InternetSearchMCP)
 
