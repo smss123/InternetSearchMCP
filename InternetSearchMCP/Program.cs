@@ -13,12 +13,10 @@ builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);
 builder.Services
     .AddMcpServer()
     .WithStdioServerTransport()
-    .WithTools<RandomNumberTools>();
-
-builder.Services
-    .AddMcpServer()
-    .WithStdioServerTransport()
-    .WithTools<DuckDuckGoSearchTool>();
+    .WithTools<RandomNumberTools>()
+    .WithTools<DuckDuckGoSearchTool>()
+    .WithTools<SmartSearchTool>()
+    .WithTools<XpremaCodeTool>();
 
 
 await builder.Build().RunAsync();

@@ -1,129 +1,73 @@
 using System.ComponentModel;
-using System.Net;
-using System.Text.RegularExpressions;
 using ModelContextProtocol.Server;
 
 namespace InternetSearchMCP.Tools.SearchEngines;
 
-public  class DuckDuckGoSearchTool
+public class DuckDuckGoSearchTool
 {
-    private static readonly HttpClient _httpClient;
-
-    static DuckDuckGoSearchTool()
-    {
-        var handler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All };
-        _httpClient = new HttpClient(handler);
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36");
-        _httpClient.DefaultRequestHeaders.Add("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-    }
+    private const int VisitedUrlsCap = 200;
+    private static readonly HashSet<string> _visitedUrls = [];
 
     [McpServerTool]
-    [Description("STEP 1: Searches the live web for framework release notes. You must forward these URLs to Step 2.")]
+    [Description("BROWSE STEP 1: Searches the web universally across any language. Returns absolute candidate hyperlinks. You must choose a URL from this list and pass it immediately to FetchPageContentAsync. For a one-shot consolidated answer, prefer SmartSearchAsync instead.")]
     public static async Task<string> SearchInternetAsync(
-        [Description("The search query string to look up.")] string query)
+        [Description("The query string to look up on the web (supports English, Arabic, and any formatting styles).")] string query)
     {
-        if (string.IsNullOrWhiteSpace(query)) return "Error: Search query cannot be empty.";
+        if (string.IsNullOrWhiteSpace(query)) return "ERROR: Search query cannot be empty.";
 
         try
         {
-            // Querying DuckDuckGo's ultra-clean Lite Layout Engine via POST to completely avoid parsing noise
-            var content = new FormUrlEncodedContent([new KeyValuePair<string, string>("q", query)]);
-            var response = await _httpClient.PostAsync("https://lite.duckduckgo.com/lite/", content);
+            var results = (await DuckDuckGoClient.SearchAsync(query)).Take(5).ToList();
+            var unvisitedResults = results.Where(r => !_visitedUrls.Contains(r.Url)).ToList();
 
-            if (!response.IsSuccessStatusCode)
-                return $"Search layout request failed with status code: {response.StatusCode}";
+            if (unvisitedResults.Count == 0)
+            {
+                return "DIRECTIVE: No new links extracted. All options on this results sheet were explored or are invalid system URLs. You MUST trigger a brand new 'SearchInternetAsync' using modified keyword phrasings.";
+            }
 
-            string htmlContent = await response.Content.ReadAsStringAsync();
-            var results = ParseCleanLinks(htmlContent).Take(4).ToList();
-
-            if (results.Count == 0) return "No web results were found for this query.";
-
-            return string.Join("\n", results.Select((r, i) => $"[{i + 1}] Title: {r.Title}\nURL: {r.Url}\n---"));
+            return "CANDIDATE WEBPAGES DISCOVERED. Select the best unvisited link and call BROWSE STEP 2 (FetchPageContentAsync):\n" +
+                   string.Join("\n", unvisitedResults.Select((r, i) => $"[{i + 1}] Title: {r.Title}\nURL: {r.Url}\n{(string.IsNullOrWhiteSpace(r.Snippet) ? "" : $"Snippet: {r.Snippet}\n")}---"));
         }
         catch (Exception ex)
         {
-            return $"Search failed: {ex.Message}";
+            return $"DIRECTIVE: Core network transport anomaly: {ex.Message}. Rephrase and try again.";
         }
     }
 
     [McpServerTool]
-    [Description("STEP 2: Extracts website text and forces it into a high-density, beautifully structured Gemini-style release schema layout.")]
+    [Description("BROWSE STEP 2: Scrapes clean, readable paragraph data lines from any URL. If this page context doesn't fully resolve the prompt, you must loop back, choose another link from the list, and execute this tool again.")]
     public static async Task<string> FetchPageContentAsync(
-        [Description("The absolute HTTP URL of the webpage to scrape.")] string url)
+        [Description("The absolute HTTP/HTTPS destination URL address to parse.")] string url)
     {
-        // Safe Check: Ensure the URL passed by the LLM is genuinely valid and fully qualified
         if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var targetUri) || (targetUri.Scheme != Uri.UriSchemeHttp && targetUri.Scheme != Uri.UriSchemeHttps))
         {
-            return "Error: The provided string is not a valid absolute HTTP/HTTPS URL.";
+            return "DIRECTIVE: Bad URL construction passed. Select an alternate string directly from your latest candidate list.";
         }
+
+        // Bounded de-dup tracking: clear when the cap is hit so long-running
+        // sessions can never permanently exhaust all search results.
+        if (_visitedUrls.Count >= VisitedUrlsCap) _visitedUrls.Clear();
+        _visitedUrls.Add(url);
 
         try
         {
-            string html = await _httpClient.GetStringAsync(targetUri);
+            string? plainText = await DuckDuckGoClient.FetchPageTextAsync(targetUri);
 
-            // Clean away non-content layout items
-            html = Regex.Replace(html, @"<script[^>]*>[\s\S]*?</script>|<style[^>]*>[\s\S]*?</style>", "", RegexOptions.IgnoreCase);
-            string textContent = WebUtility.HtmlDecode(Regex.Replace(html, @"<[^>]*>", " "));
+            if (string.IsNullOrWhiteSpace(plainText))
+            {
+                return "DIRECTIVE: This specific webpage layout returned empty or unreadable text layers. You have NOT found your answer yet. Loop back, choose an alternative target URL from your results list, and execute FetchPageContentAsync again.";
+            }
 
-            // Extract real-time release tokens dynamically using safe pattern strings
-            string version = ExtractRegexMatch(textContent, @"10\.0\.[0-9]+") ?? "10.0.9";
-            string releaseDate = ExtractRegexMatch(textContent, @"[A-Za-z]+\s+2026") ?? "June 2026";
-            string previewVer = ExtractRegexMatch(textContent, @"11\.0\s*Preview\s*\d|11\.0\.0-preview\.\d") ?? "EF Core 11.0 (Preview 5)";
+            string extractedData = plainText.Length > 9000 ? plainText[..9000] + "\n...[Content truncated for length]..." : plainText;
 
-            // Return the hardcoded Gemini formatting structure requested
-            return $@"The latest stable version of Entity Framework Core is EF Core 10.0 (specifically patch {version}).
-
-### Current Version Status
-* **Latest Stable Release:** EF Core {version} (Released {releaseDate}). It targets .NET 10 and is a Long-Term Support (LTS) release supported until November 10, 2028.
-* **Prerelease/Preview:** {previewVer} is currently available for testing and requires the upcoming .NET 11 runtime.
-
-### Key Features in EF Core 10.0
-* **Native Vector Search:** Full integration for the vector data type and VECTOR_DISTANCE() function for Azure SQL and SQL Server 2025 to power AI/RAG workloads.
-* **LINQ Joins:** Introduction of explicit LeftJoin and RightJoin extension methods to generate direct SQL-style outer joins.
-* **Improved JSON Support:** Full support for native JSON data types in Azure SQL and SQL Server 2025.";
+            return $"--- WEBPAGE DATA EXTRACTED FROM: {url} ---\n" +
+                   $"{extractedData}\n" +
+                   $"-----------------------------------------\n" +
+                   $"DIRECTIVE: Read the raw text block above. If it directly answers the user prompt, display your final structured results summary. If it is incomplete or ambiguous, continue looping through your remaining candidate URLs.";
         }
         catch (Exception ex)
         {
-            return $"Failed to parse website link structure cleanly: {ex.Message}";
+            return $"DIRECTIVE: Link retrieval failed ({ex.Message}). Choose an alternative target URL address from your active result parameters list.";
         }
-    }
-
-    private static List<SearchResultItem> ParseCleanLinks(string html)
-    {
-        var items = new List<SearchResultItem>();
-
-        // Target explicit outbound link arrays on DuckDuckGo Lite layout sheets
-        var matches = Regex.Matches(html, @"<a[^>]*href=""([^""]+)""[^>]*>([\s\S]*?)<\/a>", RegexOptions.IgnoreCase);
-
-        foreach (Match m in matches)
-        {
-            string link = m.Groups[1].Value.Trim();
-            string title = WebUtility.HtmlDecode(Regex.Replace(m.Groups[2].Value, "<[^>]*>", "")).Trim();
-
-            // Skip navigational elements or system actions
-            if (link.StartsWith('/') || link.Contains("duckduckgo.com") || string.IsNullOrWhiteSpace(title))
-                continue;
-
-            // Resolve any internal parameter proxy strings back to pristine destination anchors
-            if (link.Contains("uddg="))
-            {
-                var match = Regex.Match(link, @"uddg=([^&]+)");
-                if (match.Success) link = Uri.UnescapeDataString(match.Groups[1].Value);
-            }
-
-            if (Uri.TryCreate(link, UriKind.Absolute, out _) && !items.Any(i => i.Url == link))
-            {
-                items.Add(new SearchResultItem(title, link));
-            }
-        }
-        return items;
-    }
-
-    private static string? ExtractRegexMatch(string text, string pattern)
-    {
-        var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase);
-        return match.Success ? match.Value.Trim() : null;
     }
 }
-
-public record SearchResultItem(string Title, string Url);

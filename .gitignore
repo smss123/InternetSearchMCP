@@ -1,0 +1,10 @@
+# Build outputs
+bin/
+obj/
+
+# IDE
+.idea/
+*.user
+
+# macOS
+.DS_Store
