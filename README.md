@@ -1,5 +1,12 @@
 # InternetSearchMCP
 
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![MCP](https://img.shields.io/badge/Model%20Context%20Protocol-1.2.0-blue)](https://modelcontextprotocol.io/)
+[![GitHub](https://img.shields.io/badge/GitHub-smss123%2FInternetSearchMCP-181717?logo=github)](https://github.com/smss123/InternetSearchMCP)
+[![Last commit](https://img.shields.io/github/last-commit/smss123/InternetSearchMCP)](https://github.com/smss123/InternetSearchMCP/commits/main)
+
+> **Repository:** [github.com/smss123/InternetSearchMCP](https://github.com/smss123/InternetSearchMCP)
+
 An MCP (Model Context Protocol) server that gives any MCP-capable AI client — Claude Code, Claude Desktop, Rider AI Assistant, Cursor, etc. — the ability to search the live web and read pages. Built with .NET 10 and the official [`ModelContextProtocol`](https://www.nuget.org/packages/ModelContextProtocol) C# SDK, using DuckDuckGo as the search backend (no API key required).
 
 ## Tools
@@ -39,7 +46,7 @@ All tools work in any language, including Arabic (search and relevance ranking a
 ### Build
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/smss123/InternetSearchMCP.git
 cd InternetSearchMCP
 dotnet publish InternetSearchMCP -c Release
 ```
