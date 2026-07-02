@@ -17,7 +17,7 @@ public class DuckDuckGoSearchTool
 
         try
         {
-            var results = (await DuckDuckGoClient.SearchAsync(query)).Take(5).ToList();
+            var results = (await DuckDuckGoClient.SearchAsync(query)).ToList();
             var unvisitedResults = results.Where(r => !_visitedUrls.Contains(r.Url)).ToList();
 
             if (unvisitedResults.Count == 0)
