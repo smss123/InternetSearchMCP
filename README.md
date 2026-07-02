@@ -27,7 +27,16 @@ All tools work in any language, including Arabic (search and relevance ranking a
 **`enhance_prompt`**
 - `rawPrompt` (string, required) — the user's raw, unmodified prompt (any language)
 
-Returns an `ENHANCED PROMPT:` block (task statement + the original wording quoted verbatim + expected output format), a `RECOMMENDED NEXT TOOL:` line, and — for vague follow-ups like *"and how do I fix it?"* — a `CONTEXT USED:` line showing which recent session topics were attached. It never translates: the LLM is instructed to respond in the same language as the original prompt, so every language works.
+Classifies the prompt (coding error, code how-to, factual question, writing task, or vague follow-up) using language-neutral signals, then returns an `ENHANCED PROMPT:` block with full prompt-engineering structure:
+
+1. **Role** — e.g. *"You are a senior software engineer doing root-cause debugging"*
+2. **Task statement** — sharpened per type (root cause not symptom, runnable code, verify-don't-guess)
+3. **Original wording quoted verbatim** — never translated or paraphrased
+4. **Key elements detected** — exception names, error codes, URLs, file paths, identifiers, quoted strings the answer must address
+5. **Reasoning approach** — a per-type step recipe
+6. **Expected output format** + a quality bar (*"correct over fast; specific over generic"*)
+
+Plus a `RECOMMENDED NEXT TOOL:` line including a ready-made condensed argument (e.g. `xprema_code (suggested problem argument: "System.NullReferenceException HttpClient.PostAsync")`), and — for vague follow-ups like *"and how do I fix it?"* — a `CONTEXT USED:` line showing which recent session topics were attached (last 10 prompts remembered in-memory). It never translates: the LLM is instructed to respond in the same language as the original prompt, so every language works.
 
 > **Making clients call it every time:** MCP cannot force tool order, so add this to your client's system prompt (especially for local models in LM Studio):
 > *"Always call enhance_prompt first with the user's raw message, then follow its ENHANCED PROMPT and RECOMMENDED NEXT TOOL."*
@@ -176,6 +185,10 @@ InternetSearchMCP/
 ├── Program.cs                          # Host setup + MCP tool registration (stdio transport)
 └── Tools/
     ├── RandomNumberTools.cs            # Sample tool from the template
+    ├── PromptEnhancement/
+    │   ├── PromptEnhancerTool.cs       # enhance_prompt: classification, key-element
+    │   │                               #   extraction, per-type templates
+    │   └── PromptContextStore.cs       # bounded session memory (last 10 prompts)
     └── SearchEngines/
         ├── DuckDuckGoClient.cs         # Shared core: search, organic-result parsing,
         │                               #   page fetch (timeout/size caps), HTML→text,
