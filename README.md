@@ -35,6 +35,7 @@ Follows the standard two-phase prompt-writing pattern: **first understand, then 
 4. **Key elements detected** — exception names, error codes, URLs, file paths, identifiers, quoted strings the answer must address
 5. **Reasoning approach** — a per-type step recipe
 6. **Expected output format** + a quality bar (*"correct over fast; specific over generic"*)
+7. **Blind-spot rule** — instructs the answering LLM to hunt for *dark points* (issues the user doesn't know to ask about, with per-type hints like security pitfalls or misconceptions) and end its response with a "Suggestions" section: assumptions made, dark points found, and 2–3 concrete next steps
 
 Plus a `RECOMMENDED NEXT TOOL:` line including a ready-made condensed argument (e.g. `xprema_code (suggested problem argument: "System.NullReferenceException HttpClient.PostAsync")`), and — for vague follow-ups like *"and how do I fix it?"* — a `CONTEXT USED:` line showing which recent session topics were attached (last 10 prompts remembered in-memory). It never translates: the LLM is instructed to respond in the same language as the original prompt, so every language works.
 

@@ -232,6 +232,19 @@ public class PromptEnhancerTool
         };
         sb.AppendLine(format);
         sb.AppendLine("Quality bar: correct over fast; specific over generic; if information is missing, say exactly what is missing instead of inventing it.");
+        sb.AppendLine();
+
+        string blindSpotHint = type switch
+        {
+            PromptType.CodeError => "e.g. a deeper design flaw behind the error, version incompatibilities, or the same bug lurking elsewhere in their code",
+            PromptType.CodeHowTo => "e.g. security/performance pitfalls of the requested approach, a simpler standard solution they may not know exists, or maintenance costs",
+            PromptType.FactualQuestion => "e.g. common misconceptions around this topic, important context that changes the answer, or a better question they should be asking",
+            PromptType.WritingTask => "e.g. audience or cultural considerations they may have missed, stronger formats for the same goal, or claims that need verification",
+            _ => "e.g. what their request is probably really aiming at, and nearby options they may not know exist"
+        };
+        sb.AppendLine($"Blind-spot rule: while answering, actively look for DARK POINTS — relevant issues the user likely does not know to ask about ({blindSpotHint}). " +
+                      "End your response with a short \"Suggestions\" section: (1) assumptions you made, (2) the dark points found, (3) 2-3 concrete next steps or better questions. " +
+                      "Skip this section only if there is genuinely nothing the user is missing.");
         sb.Append("Respond in the same language as the original prompt above.");
 
         return sb.ToString();
