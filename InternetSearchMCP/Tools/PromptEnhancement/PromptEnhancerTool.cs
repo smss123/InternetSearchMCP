@@ -51,12 +51,15 @@ public class PromptEnhancerTool
         sb.AppendLine("ENHANCED PROMPT:");
         sb.AppendLine(BuildEnhancedPrompt(rawPrompt, type, contextTopics));
         sb.AppendLine();
-        sb.AppendLine($"RECOMMENDED NEXT TOOL: {type switch
+        string recommendation = type switch
         {
-            PromptType.CodeError or PromptType.CodeHowTo => "xprema_code",
-            PromptType.FactualQuestion => "smart_search",
+            PromptType.CodeError or PromptType.CodeHowTo =>
+                $"xprema_code (suggested problem argument: \"{BuildSearchQuery(rawPrompt)}\")",
+            PromptType.FactualQuestion =>
+                $"smart_search (suggested query argument: \"{BuildSearchQuery(rawPrompt)}\")",
             _ => "none"
-        }}");
+        };
+        sb.AppendLine($"RECOMMENDED NEXT TOOL: {recommendation}");
         if (contextTopics.Count > 0)
             sb.AppendLine($"CONTEXT USED: expanded vague prompt with recent session topics: {string.Join(", ", contextTopics)}");
 
@@ -106,42 +109,114 @@ public class PromptEnhancerTool
     /// <summary>
     /// Mirror principle: the user's wording is quoted verbatim — never translated,
     /// never paraphrased — so enhancement works identically for any language.
+    /// Templates apply full prompt-engineering structure: role, task, key elements,
+    /// reasoning approach, output contract, and quality bar.
     /// </summary>
     private static string BuildEnhancedPrompt(string rawPrompt, PromptType type, List<string> contextTopics)
     {
         var sb = new StringBuilder();
 
+        string role = type switch
+        {
+            PromptType.CodeError => "You are a senior software engineer doing root-cause debugging.",
+            PromptType.CodeHowTo => "You are a senior software engineer known for minimal, production-ready implementations.",
+            PromptType.FactualQuestion => "You are a meticulous researcher who only states what sources support.",
+            PromptType.WritingTask => "You are a professional writer who nails tone and audience on the first draft.",
+            _ => "You are a careful assistant who resolves ambiguity before acting."
+        };
+        sb.AppendLine(role);
+        sb.AppendLine();
+
         string task = type switch
         {
-            PromptType.CodeError => "Task: Diagnose and fix the following coding error. Identify the root cause, then provide corrected code.",
-            PromptType.CodeHowTo => "Task: Provide a working implementation for the following coding request, with brief usage notes.",
-            PromptType.FactualQuestion => "Task: Answer the following question accurately using current information; cite sources.",
-            PromptType.WritingTask => "Task: Complete the following writing request. Match the requested tone and format; ask nothing, produce the text.",
-            _ => "Task: Interpret and fulfill the following request."
+            PromptType.CodeError => "Task: Diagnose the following error. Find the ROOT CAUSE (not just the symptom), then provide the corrected code and explain why the fix is correct.",
+            PromptType.CodeHowTo => "Task: Provide a complete, working implementation for the following request — runnable as-is, following the conventions of the language/framework involved.",
+            PromptType.FactualQuestion => "Task: Answer the following question accurately using current, verifiable information. Distinguish established facts from claims; never guess.",
+            PromptType.WritingTask => "Task: Produce the requested text, matching the implied tone, audience, and format. Deliver the text itself — no meta-commentary.",
+            _ => "Task: Interpret the following request. If a reasonable interpretation exists, fulfill it; state the interpretation you chose in one line."
         };
         sb.AppendLine(task);
         sb.AppendLine();
         sb.AppendLine("Original prompt (verbatim):");
         sb.AppendLine($"\"{rawPrompt}\"");
 
+        var keyElements = ExtractKeyElements(rawPrompt);
+        if (keyElements.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Key elements detected (address each explicitly): {string.Join("; ", keyElements)}");
+        }
+
         if (contextTopics.Count > 0)
         {
             sb.AppendLine();
-            sb.AppendLine($"This likely refers to the recent conversation topics: {string.Join(", ", contextTopics)}.");
+            sb.AppendLine($"This likely refers to the recent conversation topics: {string.Join(", ", contextTopics)}. Confirm the reference fits before relying on it.");
         }
 
         sb.AppendLine();
+        string approach = type switch
+        {
+            PromptType.CodeError => "Approach: (1) read the error literally, (2) identify which code path produces it, (3) list candidate causes and eliminate them against the evidence, (4) fix the surviving cause.",
+            PromptType.CodeHowTo => "Approach: choose the idiomatic solution first; note simpler/alternative options only if they change a real trade-off.",
+            PromptType.FactualQuestion => "Approach: verify against at least one source before asserting; flag anything uncertain or time-sensitive with its date.",
+            PromptType.WritingTask => "Approach: infer audience and purpose from the request; prefer concrete wording over filler.",
+            _ => "Approach: pick the most probable intent; do not ask clarifying questions unless genuinely blocked."
+        };
+        sb.AppendLine(approach);
+        sb.AppendLine();
+
         string format = type switch
         {
-            PromptType.CodeError or PromptType.CodeHowTo => "Expected output: root cause (1-2 sentences if applicable), then code in fenced blocks, then any caveats.",
-            PromptType.FactualQuestion => "Expected output: direct answer first, then supporting details with source URLs.",
-            PromptType.WritingTask => "Expected output: the requested text only, ready to use.",
-            _ => "Expected output: a direct, structured response."
+            PromptType.CodeError => "Expected output: (1) root cause in 1-2 sentences, (2) corrected code in fenced blocks, (3) why the fix works, (4) how to prevent recurrence (one line).",
+            PromptType.CodeHowTo => "Expected output: brief plan (2-3 bullets), then complete code in fenced blocks, then usage example and caveats.",
+            PromptType.FactualQuestion => "Expected output: direct answer in the first sentence, then supporting details, then source URLs.",
+            PromptType.WritingTask => "Expected output: the requested text only, ready to use without edits.",
+            _ => "Expected output: a direct, structured response; lead with the answer."
         };
         sb.AppendLine(format);
+        sb.AppendLine("Quality bar: correct over fast; specific over generic; if information is missing, say exactly what is missing instead of inventing it.");
         sb.Append("Respond in the same language as the original prompt above.");
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Language-neutral extraction of concrete anchors the answer must address:
+    /// exception/error names, code identifiers, quoted strings, URLs, file paths, numbers with units.
+    /// </summary>
+    private static List<string> ExtractKeyElements(string prompt)
+    {
+        var elements = new List<string>();
+
+        void AddAll(string pattern, string label) =>
+            elements.AddRange(Regex.Matches(prompt, pattern).Select(m => $"{label} {m.Value}").Distinct().Take(3));
+
+        AddAll(@"\b\w+(Exception|Error)\b", "error:");
+        AddAll(@"\berror\s+\w*\d+\b", "error code:");
+        AddAll(@"\bhttps?://\S+", "URL:");
+        AddAll(@"(?:[A-Za-z]:\\|/)[\w./\\-]+\.\w{1,5}\b", "file:");
+        AddAll(@"\b[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*\(?", "identifier:");
+        AddAll(@"""[^""\n]{3,60}""|'[^'\n]{3,60}'", "quoted:");
+
+        return elements.Distinct().Take(8).ToList();
+    }
+
+    /// <summary>
+    /// Condenses the raw prompt into a search-ready query: error names and identifiers
+    /// first, then the longest content words — quotes and filler stripped.
+    /// </summary>
+    private static string BuildSearchQuery(string prompt)
+    {
+        var anchors = Regex.Matches(prompt, @"\b\w+(Exception|Error)\b|\b[A-Za-z_]\w*\.[A-Za-z_]\w*\b")
+            .Select(m => m.Value).Distinct().Take(3).ToList();
+
+        var contentWords = Regex.Matches(prompt, @"[\p{L}\p{N}#+.]{4,}")
+            .Select(m => m.Value)
+            .Where(w => !anchors.Any(a => a.Contains(w, StringComparison.OrdinalIgnoreCase)))
+            .Distinct().Take(6);
+
+        string query = string.Join(" ", anchors.Concat(contentWords));
+        return query.Length > 120 ? query[..120] : query;
     }
 
     private static List<string> Tokenize(string text) =>
