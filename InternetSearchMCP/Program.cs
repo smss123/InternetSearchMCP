@@ -1,4 +1,5 @@
 
+using InternetSearchMCP.Tools.PromptEnhancement;
 using InternetSearchMCP.Tools.SearchEngines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -16,7 +17,8 @@ builder.Services
     .WithTools<RandomNumberTools>()
     .WithTools<DuckDuckGoSearchTool>()
     .WithTools<SmartSearchTool>()
-    .WithTools<XpremaCodeTool>();
+    .WithTools<XpremaCodeTool>()
+    .WithTools<PromptEnhancerTool>();
 
 
 await builder.Build().RunAsync();

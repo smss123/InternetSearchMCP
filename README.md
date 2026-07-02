@@ -14,6 +14,7 @@ An MCP (Model Context Protocol) server that gives any MCP-capable AI client — 
 
 | Tool | What it does | When to use |
 |------|--------------|-------------|
+| `enhance_prompt` | Rewrites the raw user prompt into a structured, context-enriched version and recommends which tool to call next | **Always, first** — before answering or calling other tools |
 | `smart_search` | One-shot search: fetches the top result pages in parallel, ranks their content against the query, returns a consolidated answer block with per-source attribution | Default choice for general questions |
 | `xprema_code` | Searches for a coding problem/error and returns **only code snippets** (formatting preserved), each with a one-line source URL | Compiler errors, exceptions, API usage, how-to-implement |
 | `search_internet` | Low-level: returns a list of candidate result links (title, URL, snippet) | When you want to pick pages manually |
@@ -22,6 +23,14 @@ An MCP (Model Context Protocol) server that gives any MCP-capable AI client — 
 All tools work in any language, including Arabic (search and relevance ranking are Unicode-aware).
 
 ### Tool parameters
+
+**`enhance_prompt`**
+- `rawPrompt` (string, required) — the user's raw, unmodified prompt (any language)
+
+Returns an `ENHANCED PROMPT:` block (task statement + the original wording quoted verbatim + expected output format), a `RECOMMENDED NEXT TOOL:` line, and — for vague follow-ups like *"and how do I fix it?"* — a `CONTEXT USED:` line showing which recent session topics were attached. It never translates: the LLM is instructed to respond in the same language as the original prompt, so every language works.
+
+> **Making clients call it every time:** MCP cannot force tool order, so add this to your client's system prompt (especially for local models in LM Studio):
+> *"Always call enhance_prompt first with the user's raw message, then follow its ENHANCED PROMPT and RECOMMENDED NEXT TOOL."*
 
 **`smart_search`**
 - `query` (string, required) — what to look up
