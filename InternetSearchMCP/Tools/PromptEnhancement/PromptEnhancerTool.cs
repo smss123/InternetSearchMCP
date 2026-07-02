@@ -47,9 +47,15 @@ public class PromptEnhancerTool
 
         PromptContextStore.Add(rawPrompt);
 
+        var keyElements = ExtractKeyElements(rawPrompt);
+        string subject = BuildSubject(rawPrompt, keyElements);
+
         var sb = new StringBuilder();
+        sb.AppendLine("UNDERSTANDING:");
+        sb.AppendLine(BuildUnderstanding(rawPrompt, type, subject, keyElements, contextTopics));
+        sb.AppendLine();
         sb.AppendLine("ENHANCED PROMPT:");
-        sb.AppendLine(BuildEnhancedPrompt(rawPrompt, type, contextTopics));
+        sb.AppendLine(BuildEnhancedPrompt(rawPrompt, type, subject, keyElements, contextTopics));
         sb.AppendLine();
         string recommendation = type switch
         {
@@ -112,7 +118,56 @@ public class PromptEnhancerTool
     /// Templates apply full prompt-engineering structure: role, task, key elements,
     /// reasoning approach, output contract, and quality bar.
     /// </summary>
-    private static string BuildEnhancedPrompt(string rawPrompt, PromptType type, List<string> contextTopics)
+    /// <summary>
+    /// Phase 1 of the prompt-writing standard: state what was understood from the
+    /// raw prompt BEFORE generating anything, so the generated prompt is traceable.
+    /// </summary>
+    private static string BuildUnderstanding(string rawPrompt, PromptType type, string subject,
+        List<string> keyElements, List<string> contextTopics)
+    {
+        var sb = new StringBuilder();
+
+        string intent = type switch
+        {
+            PromptType.CodeError => "The user has a failing piece of code and wants it diagnosed and fixed.",
+            PromptType.CodeHowTo => "The user wants working code that implements something specific.",
+            PromptType.FactualQuestion => "The user is asking a question and expects an accurate, sourced answer.",
+            PromptType.WritingTask => "The user wants a piece of text produced for them.",
+            _ => "The user's request is underspecified; intent must be inferred from context."
+        };
+        sb.AppendLine($"- Intent: {intent}");
+        if (!string.IsNullOrWhiteSpace(subject))
+            sb.AppendLine($"- Subject: {subject}");
+        if (keyElements.Count > 0)
+            sb.AppendLine($"- Concrete signals: {string.Join("; ", keyElements)}");
+        if (contextTopics.Count > 0)
+            sb.AppendLine($"- Inferred from session context: {string.Join(", ", contextTopics)}");
+
+        string missing = type switch
+        {
+            PromptType.CodeError when !Regex.IsMatch(rawPrompt, @"```|[{};]") =>
+                "- Missing: the surrounding code was not provided; the answer should state assumptions or request the snippet.",
+            PromptType.WritingTask => "- Missing (if not stated): audience, length, and tone — infer sensible defaults.",
+            PromptType.Vague => "- Missing: an explicit subject; relying on session context above.",
+            _ => ""
+        };
+        if (missing.Length > 0) sb.AppendLine(missing);
+
+        return sb.ToString().TrimEnd();
+    }
+
+    /// <summary>
+    /// Condensed subject line: key-element values first, else top content words.
+    /// </summary>
+    private static string BuildSubject(string rawPrompt, List<string> keyElements)
+    {
+        if (keyElements.Count > 0)
+            return string.Join(", ", keyElements.Select(e => e[(e.IndexOf(' ') + 1)..]).Distinct().Take(4));
+        return BuildSearchQuery(rawPrompt);
+    }
+
+    private static string BuildEnhancedPrompt(string rawPrompt, PromptType type, string subject,
+        List<string> keyElements, List<string> contextTopics)
     {
         var sb = new StringBuilder();
 
@@ -127,20 +182,22 @@ public class PromptEnhancerTool
         sb.AppendLine(role);
         sb.AppendLine();
 
+        // The subject from the understanding phase is woven into the task statement
+        // so the generated prompt stands on its own.
+        string subjectClause = string.IsNullOrWhiteSpace(subject) ? "" : $" concerning: {subject}";
         string task = type switch
         {
-            PromptType.CodeError => "Task: Diagnose the following error. Find the ROOT CAUSE (not just the symptom), then provide the corrected code and explain why the fix is correct.",
-            PromptType.CodeHowTo => "Task: Provide a complete, working implementation for the following request — runnable as-is, following the conventions of the language/framework involved.",
-            PromptType.FactualQuestion => "Task: Answer the following question accurately using current, verifiable information. Distinguish established facts from claims; never guess.",
-            PromptType.WritingTask => "Task: Produce the requested text, matching the implied tone, audience, and format. Deliver the text itself — no meta-commentary.",
-            _ => "Task: Interpret the following request. If a reasonable interpretation exists, fulfill it; state the interpretation you chose in one line."
+            PromptType.CodeError => $"Task: Diagnose the error{subjectClause}. Find the ROOT CAUSE (not just the symptom), then provide the corrected code and explain why the fix is correct.",
+            PromptType.CodeHowTo => $"Task: Provide a complete, working implementation{subjectClause} — runnable as-is, following the conventions of the language/framework involved.",
+            PromptType.FactualQuestion => $"Task: Answer the question{subjectClause} accurately using current, verifiable information. Distinguish established facts from claims; never guess.",
+            PromptType.WritingTask => $"Task: Produce the requested text{subjectClause}, matching the implied tone, audience, and format. Deliver the text itself — no meta-commentary.",
+            _ => $"Task: Interpret the request{subjectClause}. If a reasonable interpretation exists, fulfill it; state the interpretation you chose in one line."
         };
         sb.AppendLine(task);
         sb.AppendLine();
         sb.AppendLine("Original prompt (verbatim):");
         sb.AppendLine($"\"{rawPrompt}\"");
 
-        var keyElements = ExtractKeyElements(rawPrompt);
         if (keyElements.Count > 0)
         {
             sb.AppendLine();

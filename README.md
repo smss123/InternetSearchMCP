@@ -27,7 +27,7 @@ All tools work in any language, including Arabic (search and relevance ranking a
 **`enhance_prompt`**
 - `rawPrompt` (string, required) — the user's raw, unmodified prompt (any language)
 
-Classifies the prompt (coding error, code how-to, factual question, writing task, or vague follow-up) using language-neutral signals, then returns an `ENHANCED PROMPT:` block with full prompt-engineering structure:
+Follows the standard two-phase prompt-writing pattern: **first understand, then generate**. The output opens with an `UNDERSTANDING:` block — intent, extracted subject, concrete signals, and what's missing from the raw prompt — and only then the `ENHANCED PROMPT:` generated from that understanding (the subject is woven directly into the task statement). Classification (coding error, code how-to, factual question, writing task, or vague follow-up) uses language-neutral signals. The enhanced prompt has full prompt-engineering structure:
 
 1. **Role** — e.g. *"You are a senior software engineer doing root-cause debugging"*
 2. **Task statement** — sharpened per type (root cause not symptom, runnable code, verify-don't-guess)
