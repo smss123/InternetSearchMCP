@@ -38,6 +38,7 @@ public class PromptEnhancerTool
         if (string.IsNullOrWhiteSpace(rawPrompt))
             return Task.FromResult("ERROR: Raw prompt cannot be empty.");
 
+        EnhancementTracker.MarkEnhanced();
         rawPrompt = rawPrompt.Trim();
         var type = Classify(rawPrompt);
 

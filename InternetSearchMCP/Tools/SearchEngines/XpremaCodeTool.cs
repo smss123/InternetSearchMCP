@@ -10,13 +10,14 @@ public class XpremaCodeTool
     private const int GlobalCharBudget = 8000;
 
     [McpServerTool]
-    [Description("XPREMA CODE: Searches the web for a solution to a coding problem or error and returns ONLY code snippets (formatting preserved), each with a single source-URL line. Use for compiler errors, exceptions, API usage questions, and how-to-implement problems. No prose is returned.")]
+    [Description("XPREMA CODE: Searches the web for a solution to a coding problem or error and returns ONLY code snippets (formatting preserved), each with a single source-URL line. Use for compiler errors, exceptions, API usage questions, and how-to-implement problems. No prose is returned. NOTE: you should have called enhance_prompt on the user's raw message BEFORE this tool.")]
     public static async Task<string> XpremaCodeAsync(
         [Description("The coding problem, error message, or implementation question to solve.")] string problem,
         [Description("Optional programming language or framework hint (e.g. 'C#', 'ABP Framework', 'python').")] string language = "",
         [Description("How many top result pages to read (1-5, default 3).")] int maxSources = 3)
     {
         if (string.IsNullOrWhiteSpace(problem)) return "ERROR: Problem description cannot be empty.";
+        string nudge = PromptEnhancement.EnhancementTracker.NudgeIfSkipped();
         maxSources = Math.Clamp(maxSources, 1, 5);
 
         string query = string.IsNullOrWhiteSpace(language) ? problem : $"{language} {problem}";
@@ -64,6 +65,7 @@ public class XpremaCodeTool
         }
 
         var sb = new StringBuilder();
+        sb.Append(nudge);
         int used = 0;
         foreach (var (result, block, _) in scored)
         {

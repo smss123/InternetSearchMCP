@@ -11,12 +11,13 @@ public class SmartSearchTool
     private const int MinParagraphLength = 40;
 
     [McpServerTool]
-    [Description("SMART SEARCH: One-shot web search. Searches the web, fetches the top result pages in parallel, ranks their content against the query, and returns a single consolidated answer block with per-source attribution. Prefer this over the SearchInternetAsync/FetchPageContentAsync loop. Works in any language including Arabic.")]
+    [Description("SMART SEARCH: One-shot web search. Searches the web, fetches the top result pages in parallel, ranks their content against the query, and returns a single consolidated answer block with per-source attribution. Prefer this over the SearchInternetAsync/FetchPageContentAsync loop. Works in any language. NOTE: you should have called enhance_prompt on the user's raw message BEFORE this tool.")]
     public static async Task<string> SmartSearchAsync(
         [Description("The query string to look up on the web (any language).")] string query,
         [Description("How many top result pages to read and consolidate (1-5, default 3).")] int maxSources = 3)
     {
         if (string.IsNullOrWhiteSpace(query)) return "ERROR: Search query cannot be empty.";
+        string nudge = PromptEnhancement.EnhancementTracker.NudgeIfSkipped();
         maxSources = Math.Clamp(maxSources, 1, 5);
 
         List<SearchResultItem> results;
@@ -57,6 +58,7 @@ public class SmartSearchTool
         int budgetPerSource = GlobalCharBudget / successful.Count;
 
         var sb = new StringBuilder();
+        sb.Append(nudge);
         sb.AppendLine($"=== SMART SEARCH RESULTS FOR: {query} ===");
         for (int i = 0; i < successful.Count; i++)
         {
